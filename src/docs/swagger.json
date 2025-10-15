@@ -1,0 +1,30 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "FitLand API",
+    "version": "1.0.0",
+    "description": "Full-featured sports store backend with JWT Auth, Prisma & Swagger"
+  },
+  "servers": [{ "url": "http://localhost:3000/api" }],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "summary": "Register new user",
+        "requestBody": { "required": true },
+        "responses": { "201": { "description": "User registered" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Login user",
+        "responses": { "200": { "description": "Tokens returned" } }
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "Get all products",
+        "responses": { "200": { "description": "List of products" } }
+      }
+    }
+  }
+}
