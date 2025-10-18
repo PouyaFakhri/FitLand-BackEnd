@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -370,9 +371,11 @@ model ReturnItem {
   @@map("return_items")
 }
 
+// فقط یک مدل NewsletterSubscription باید وجود داشته باشد
 model NewsletterSubscription {
   id        String   @id @default(uuid())
   email     String   @unique
+  name      String?
   isActive  Boolean  @default(true)
   token     String   @unique
   createdAt DateTime @default(now())
@@ -380,5 +383,25 @@ model NewsletterSubscription {
 
   @@index([email])
   @@index([isActive])
+  @@index([createdAt])
   @@map("newsletter_subscriptions")
+}
+
+// مدل جدید برای اخبار ورزشی
+model SportsNews {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  imageUrl    String?
+  summary     String?
+  author      String?
+  isActive    Boolean  @default(true)
+  tags        String[]
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([isActive])
+  @@map("sports_news")
 }

@@ -1,4 +1,4 @@
-// prisma/seed.js - نسخه کامل با ۱۸۹ محصول برای SQLite
+// prisma/seed.js
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
@@ -9,26 +9,47 @@ async function main() {
   // پاک کردن داده‌های موجود
   console.log('🧹 Cleaning existing data...');
   
-  // ترتیب حذف مهم است (به دلیل وابستگی‌های foreign key)
-  await prisma.returnItem.deleteMany();
-  await prisma.returnRequest.deleteMany();
-  await prisma.review.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.cartItem.deleteMany();
-  await prisma.cart.deleteMany();
-  await prisma.wishlist.deleteMany();
-  await prisma.address.deleteMany();
-  await prisma.refreshToken.deleteMany();
-  await prisma.userCoupon.deleteMany();
-  await prisma.coupon.deleteMany();
-  await prisma.newsletterSubscription.deleteMany();
-  await prisma.productSize.deleteMany();
-  await prisma.productColor.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.banner.deleteMany();
-  await prisma.user.deleteMany();
+  try {
+    // ابتدا بررسی کنیم کدام جداول وجود دارند
+    const tables = [
+      'returnItem', 'returnRequest', 'review', 'orderItem', 'order',
+      'cartItem', 'cart', 'wishlist', 'address', 'refreshToken',
+      'userCoupon', 'coupon', 'newsletterSubscription', 'productSize',
+      'productColor', 'product', 'category', 'banner', 'user', 'sportsNews'
+    ];
+
+    // پاک کردن جداول به ترتیب معکوس وابستگی‌ها
+    const deleteOperations = [
+      () => prisma.returnItem.deleteMany().catch(() => console.log('⚠️ returnItem table not found, skipping...')),
+      () => prisma.returnRequest.deleteMany().catch(() => console.log('⚠️ returnRequest table not found, skipping...')),
+      () => prisma.review.deleteMany().catch(() => console.log('⚠️ review table not found, skipping...')),
+      () => prisma.orderItem.deleteMany().catch(() => console.log('⚠️ orderItem table not found, skipping...')),
+      () => prisma.order.deleteMany().catch(() => console.log('⚠️ order table not found, skipping...')),
+      () => prisma.cartItem.deleteMany().catch(() => console.log('⚠️ cartItem table not found, skipping...')),
+      () => prisma.cart.deleteMany().catch(() => console.log('⚠️ cart table not found, skipping...')),
+      () => prisma.wishlist.deleteMany().catch(() => console.log('⚠️ wishlist table not found, skipping...')),
+      () => prisma.address.deleteMany().catch(() => console.log('⚠️ address table not found, skipping...')),
+      () => prisma.refreshToken.deleteMany().catch(() => console.log('⚠️ refreshToken table not found, skipping...')),
+      () => prisma.userCoupon.deleteMany().catch(() => console.log('⚠️ userCoupon table not found, skipping...')),
+      () => prisma.coupon.deleteMany().catch(() => console.log('⚠️ coupon table not found, skipping...')),
+      () => prisma.newsletterSubscription.deleteMany().catch(() => console.log('⚠️ newsletterSubscription table not found, skipping...')),
+      () => prisma.productSize.deleteMany().catch(() => console.log('⚠️ productSize table not found, skipping...')),
+      () => prisma.productColor.deleteMany().catch(() => console.log('⚠️ productColor table not found, skipping...')),
+      () => prisma.product.deleteMany().catch(() => console.log('⚠️ product table not found, skipping...')),
+      () => prisma.category.deleteMany().catch(() => console.log('⚠️ category table not found, skipping...')),
+      () => prisma.banner.deleteMany().catch(() => console.log('⚠️ banner table not found, skipping...')),
+      () => prisma.sportsNews.deleteMany().catch(() => console.log('⚠️ sportsNews table not found, skipping...')),
+      () => prisma.user.deleteMany().catch(() => console.log('⚠️ user table not found, skipping...')),
+    ];
+
+    for (const operation of deleteOperations) {
+      await operation();
+    }
+    
+    console.log('✅ Data cleanup completed');
+  } catch (error) {
+    console.log('ℹ️ Some tables may not exist, continuing with seed...');
+  }
 
   // ایجاد کاربران
   console.log('👥 Creating users...');
@@ -157,6 +178,11 @@ async function main() {
       name: 'مکمل‌های ورزشی',
       imageUrl: '/images/categories/supplements.jpg',
       description: 'مکمل‌های غذایی و ورزشی'
+    },
+    {
+      name: 'دوچرخه، اسکیت و اسکوتر',
+      imageUrl: '/images/categories/bikes-skates-scooters.jpg',
+      description: 'انواع دوچرخه، اسکیت و اسکوتر برای تمام سنین'
     }
   ];
 
@@ -178,11 +204,15 @@ async function main() {
   const yogaCat = categories.find(c => c.name === 'یوگا و پیلاتس');
   const cardioCat = categories.find(c => c.name === 'کاردیو و استقامتی');
   const supplementsCat = categories.find(c => c.name === 'مکمل‌های ورزشی');
+  const bikesSkatesCat = categories.find(c => c.name === 'دوچرخه، اسکیت و اسکوتر');
 
   // تعریف سایزها و رنگ‌ها
   const sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const shoeSizes = ['38', '39', '40', '41', '42', '43', '44', '45'];
   const kidsSizes = ['26', '28', '30', '32', '34', '36'];
+  const bikeSizes = ['XS', 'S', 'M', 'L', 'XL'];
+  const skateSizes = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'];
+  const scooterSizes = ['ONE_SIZE'];
   
   const colors = [
     { name: 'مشکی', code: '#000000' },
@@ -238,6 +268,8 @@ async function main() {
     
     return product;
   }
+
+  let productCount = 0;
 
   // ایجاد محصولات - کفش ورزشی مردانه (22 محصول)
   console.log('👟 Creating men shoes products...');
@@ -575,14 +607,13 @@ async function main() {
     }
   ];
 
-چ  let productCount = 0;
   for (const productData of menShoesProducts) {
     await createProductWithVariants(productData);
     productCount++;
   }
   console.log(`✅ ${productCount} men shoes products created`);
 
-  // کفش ورزشی زنانه (21 محصول)
+  // ایجاد محصولات کفش زنانه
   console.log('👠 Creating women shoes products...');
   
   const womenShoesProducts = [
@@ -616,8 +647,6 @@ async function main() {
       sizes: ['36', '37', '38', '39'],
       colors: [colors[1], colors[6], colors[3]]
     },
-    // 19 محصول دیگر برای کفش زنانه...
-    // به دلیل محدودیت طول، فقط چند نمونه می‌آورم
     {
       name: 'کفش ورزشی آدیداس استن اسمیت زنانه',
       brand: 'Adidas',
@@ -668,13 +697,168 @@ async function main() {
   for (const productData of womenShoesProducts) {
     await createProductWithVariants(productData);
     productCount++;
-    if (productCount % 5 === 0) {
-      console.log(`✅ ${productCount} products created...`);
-    }
   }
 
-  // ادامه محصولات برای سایر دسته‌بندی‌ها...
-  // در اینجا می‌توانید محصولات بیشتری برای دسته‌بندی‌های دیگر اضافه کنید
+  // ایجاد محصولات دوچرخه، اسکیت و اسکوتر
+  console.log('🚴 Creating bicycles, skates and scooters products...');
+  
+  const bikesSkatesProducts = [
+    // دوچرخه‌ها
+    {
+      name: 'دوچرخه کوهستان TREK X-Caliber 8',
+      brand: 'Trek',
+      description: 'دوچرخه کوهستان حرفه ای با فریم آلومینیومی و سیستم تعلیق جلو',
+      price: 15000000,
+      stock: 8,
+      discountPercent: 15,
+      imageUrl: 'https://via.placeholder.com/400/4ECDC4/FFFFFF?text=Trek+Mountain+Bike',
+      salesCount: 12,
+      isFeatured: true,
+      isActive: true,
+      categoryId: bikesSkatesCat.id,
+      sizes: bikeSizes,
+      colors: [colors[0], colors[2], colors[4]]
+    },
+    {
+      name: 'دوچرخه جاده ای Giant Contend 3',
+      brand: 'Giant',
+      description: 'دوچرخه جاده ای سبک با فریم کامپوزیت و دنده‌های شیمانو',
+      price: 12000000,
+      stock: 6,
+      discountPercent: 10,
+      imageUrl: 'https://via.placeholder.com/400/45B7D1/FFFFFF?text=Giant+Road+Bike',
+      salesCount: 8,
+      isFeatured: true,
+      isActive: true,
+      categoryId: bikesSkatesCat.id,
+      sizes: bikeSizes,
+      colors: [colors[1], colors[3], colors[0]]
+    },
+    // اسکیت‌ها
+    {
+      name: 'اسکیت اینلین حرفه ای Rollerblade Twister XT',
+      brand: 'Rollerblade',
+      description: 'اسکیت اینلین حرفه ای با بوت ساپورت بالا و چرخ های سریع',
+      price: 4500000,
+      stock: 12,
+      discountPercent: 20,
+      imageUrl: 'https://via.placeholder.com/400/EE5A24/FFFFFF?text=Rollerblade+Inline',
+      salesCount: 18,
+      isFeatured: true,
+      isActive: true,
+      categoryId: bikesSkatesCat.id,
+      sizes: skateSizes,
+      colors: [colors[0], colors[1], colors[2]]
+    },
+    // اسکوترها
+    {
+      name: 'اسکوتر برقی Xiaomi Mi Electric Scooter Pro 2',
+      brand: 'Xiaomi',
+      description: 'اسکوتر برقی هوشمند با برد 45 کیلومتر و سرعت 25 کیلومتر بر ساعت',
+      price: 12500000,
+      stock: 8,
+      discountPercent: 15,
+      imageUrl: 'https://via.placeholder.com/400/54A0FF/FFFFFF?text=Xiaomi+E-Scooter',
+      salesCount: 14,
+      isFeatured: true,
+      isActive: true,
+      categoryId: bikesSkatesCat.id,
+      sizes: scooterSizes,
+      colors: [colors[0], colors[1], colors[10]]
+    }
+  ];
+
+  for (const productData of bikesSkatesProducts) {
+    await createProductWithVariants(productData);
+    productCount++;
+  }
+
+  console.log(`✅ ${productCount} total products created`);
+
+  // ایجاد اخبار ورزشی
+  console.log('📰 Creating sports news...');
+  
+  const sportsNews = [
+    {
+      title: 'رونمایی از جدیدترین کفش‌های نایک در فصل پاییز',
+      content: 'شرکت نایک از جدیدترین سری کفش‌های ورزشی خود با تکنولوژی پیشرفته ایر مکس رونمایی کرد. این کفش‌ها با طراحی مدرن و فناوری‌های نوین در زمینه کاهش فشار بر مفاصل، مناسب برای ورزشکاران حرفه‌ای و آماتور می‌باشد.',
+      imageUrl: 'https://via.placeholder.com/600/FF6B6B/FFFFFF?text=New+Nike+Shoes',
+      summary: 'رونمایی از کفش‌های جدید نایک با تکنولوژی ایر مکس',
+      author: 'تیم تحریریه فیت لند',
+      tags: ['نایک', 'کفش ورزشی', 'تکنولوژی', 'ایر مکس'],
+      viewCount: 150
+    },
+    {
+      title: 'مسابقات دو استقامت تهران ۱۴۰۳',
+      content: 'مسابقات دو استقامت تهران با حضور بیش از ۵۰۰۰ ورزشکار در تاریخ ۱۵ آبان ماه برگزار خواهد شد. این مسابقات در سه رشته نیمه ماراتن، ۱۰ کیلومتر و ۵ کیلومتر برگزار می‌شود.',
+      imageUrl: 'https://via.placeholder.com/600/4ECDC4/FFFFFF?text=Tehran+Marathon',
+      summary: 'مسابقات دو استقامت تهران با حضور هزاران ورزشکار',
+      author: 'تیم تحریریه فیت لند',
+      tags: ['مسابقات', 'دو استقامت', 'تهران', 'ماراتن'],
+      viewCount: 89
+    },
+    {
+      title: 'تاثیر ورزش بر سلامت روان',
+      content: 'مطالعات جدید نشان می‌دهد که ورزش منظم نه تنها بر سلامت جسمی بلکه بر سلامت روان نیز تاثیر بسزایی دارد. ورزش‌های هوازی مانند دویدن و شنا می‌توانند به کاهش استرس و اضطراب کمک کنند.',
+      imageUrl: 'https://via.placeholder.com/600/45B7D1/FFFFFF?text=Mental+Health+Sports',
+      summary: 'تاثیر مثبت ورزش بر کاهش استرس و بهبود سلامت روان',
+      author: 'دکتر محمدی',
+      tags: ['سلامت روان', 'ورزش', 'استرس', 'تندرستی'],
+      viewCount: 234
+    },
+    {
+      title: 'جدیدترین ترندهای لباس ورزشی ۲۰۲۴',
+      content: 'در سال ۲۰۲۴ شاهد ظهور ترندهای جدیدی در طراحی لباس ورزشی هستیم. استفاده از پارچه‌های هوشمند، طراحی‌های مینیمال و رنگ‌های روشن از ویژگی‌های بارز این ترندها می‌باشد.',
+      imageUrl: 'https://via.placeholder.com/600/96CEB4/FFFFFF?text=2024+Sportswear',
+      summary: 'مروری بر ترندهای جدید لباس ورزشی در سال ۲۰۲۴',
+      author: 'تیم تحریریه فیت لند',
+      tags: ['لباس ورزشی', 'ترند', 'مد', '۲۰۲۴'],
+      viewCount: 167
+    },
+    {
+      title: 'افتتاح باشگاه ورزشی پیشرفته در شمال تهران',
+      content: 'باشگاه ورزشی مدرن با تجهیزات پیشرفته در منطقه شمال تهران افتتاح شد. این باشگاه مجهز به جدیدترین دستگاه‌های بدنسازی و استخر شنای المپیک می‌باشد.',
+      imageUrl: 'https://via.placeholder.com/600/FECA57/FFFFFF?text=New+Gym+Tehran',
+      summary: 'افتتاح باشگاه ورزشی مدرن در شمال تهران',
+      author: 'تیم تحریریه فیت لند',
+      tags: ['باشگاه', 'تهران', 'بدنسازی', 'استخر'],
+      viewCount: 98
+    },
+    {
+      title: 'راهنمای انتخاب کفش ورزشی مناسب',
+      content: 'انتخاب کفش ورزشی مناسب یکی از مهمترین عوامل در پیشگیری از آسیب‌های ورزشی است. در این مقاله به بررسی معیارهای انتخاب کفش مناسب برای ورزش‌های مختلف می‌پردازیم.',
+      imageUrl: 'https://via.placeholder.com/600/FF9FF3/FFFFFF?text=Sports+Shoes+Guide',
+      summary: 'راهنمای کامل انتخاب کفش ورزشی مناسب',
+      author: 'کارشناس ورزشی',
+      tags: ['کفش ورزشی', 'راهنما', 'پیشگیری از آسیب', 'ورزش'],
+      viewCount: 312
+    },
+    {
+      title: 'برگزاری کارگاه آموزشی یوگا و مدیتیشن',
+      content: 'کارگاه تخصصی یوگا و مدیتیشن با تدریس اساتید بین‌المللی در مرکز ورزشی فیت لند برگزار می‌شود. این کارگاه به مدت ۳ روز و با ارائه گواهینامه معتبر خواهد بود.',
+      imageUrl: 'https://via.placeholder.com/600/54A0FF/FFFFFF?text=Yoga+Workshop',
+      summary: 'کارگاه تخصصی یوگا و مدیتیشن با اساتید بین‌المللی',
+      author: 'تیم تحریریه فیت لند',
+      tags: ['یوگا', 'مدیتیشن', 'کارگاه', 'آموزش'],
+      viewCount: 76
+    },
+    {
+      title: 'تغذیه مناسب برای ورزشکاران حرفه‌ای',
+      content: 'تغذیه مناسب نقش کلیدی در عملکرد ورزشکاران حرفه‌ای دارد. در این مقاله به بررسی برنامه غذایی مناسب برای ورزشکاران در رشته‌های مختلف می‌پردازیم.',
+      imageUrl: 'https://via.placeholder.com/600/5F27CD/FFFFFF?text=Sports+Nutrition',
+      summary: 'بررسی برنامه غذایی مناسب برای ورزشکاران حرفه‌ای',
+      author: 'متخصص تغذیه',
+      tags: ['تغذیه', 'ورزشکاران', 'برنامه غذایی', 'سلامت'],
+      viewCount: 189
+    }
+  ];
+
+  for (const news of sportsNews) {
+    await prisma.sportsNews.create({
+      data: news
+    });
+  }
+  console.log(`✅ ${sportsNews.length} sports news created`);
 
   // ایجاد کوپن‌ها
   console.log('🎫 Creating coupons...');
@@ -743,6 +927,12 @@ async function main() {
       imageUrl: '/banners/flash-sale.jpg',
       link: '/products?flashSale=true',
       isActive: true
+    },
+    {
+      title: 'دوچرخه و اسکوتر جدید',
+      imageUrl: '/banners/bikes-scooters.jpg',
+      link: '/categories/bikes',
+      isActive: true
     }
   ];
 
@@ -810,6 +1000,7 @@ async function main() {
   console.log(`   👥 ${users.length} users (1 admin + 4 regular)`);
   console.log(`   📂 ${categories.length} categories`);
   console.log(`   📦 ${productCount} products with sizes & colors`);
+  console.log(`   📰 ${sportsNews.length} sports news`);
   console.log(`   💬 125 reviews`);
   console.log(`   🎫 ${coupons.length} coupons`);
   console.log(`   🎯 ${banners.length} banners`);

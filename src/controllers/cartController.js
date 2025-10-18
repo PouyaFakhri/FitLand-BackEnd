@@ -27,13 +27,13 @@ const getCart = async (req, res) => {
                 category: true
               }
             } 
-          } 
+          },
+          orderBy: { createdAt: 'desc' }
         } 
       } 
     });
     
     if (!cart) {
-      // اگر سبد خرید وجود نداشت، ایجادش کن
       cart = await prisma.cart.create({
         data: {
           userId: req.user.id
@@ -57,14 +57,40 @@ const getCart = async (req, res) => {
     // محاسبه قیمت نهایی برای هر محصول
     const cartWithFinalPrices = {
       ...cart,
-      items: cart.items.map(item => ({
-        ...item,
-        product: {
-          ...item.product,
-          finalPrice: item.product.price * (1 - (item.product.discountPercent || 0) / 100),
-          hasDiscount: (item.product.discountPercent || 0) > 0
-        }
-      }))
+      items: cart.items.map(item => {
+        const productPrice = typeof item.product.price === 'object' 
+          ? parseFloat(item.product.price.toString()) 
+          : parseFloat(item.product.price);
+        
+        const finalPrice = parseFloat((productPrice * (1 - (item.product.discountPercent || 0) / 100)).toFixed(2));
+        
+        return {
+          ...item,
+          product: {
+            ...item.product,
+            price: productPrice,
+            finalPrice,
+            hasDiscount: (item.product.discountPercent || 0) > 0,
+            itemTotal: parseFloat((finalPrice * item.quantity).toFixed(2))
+          }
+        };
+      }),
+      summary: {
+        itemCount: cart.items.length,
+        totalBeforeDiscount: parseFloat(cart.items.reduce((sum, item) => {
+          const productPrice = typeof item.product.price === 'object' 
+            ? parseFloat(item.product.price.toString()) 
+            : parseFloat(item.product.price);
+          return sum + (productPrice * item.quantity);
+        }, 0).toFixed(2)),
+        totalDiscount: parseFloat(cart.items.reduce((sum, item) => {
+          const productPrice = typeof item.product.price === 'object' 
+            ? parseFloat(item.product.price.toString()) 
+            : parseFloat(item.product.price);
+          const discount = (productPrice * (item.product.discountPercent || 0) / 100) * item.quantity;
+          return sum + discount;
+        }, 0).toFixed(2))
+      }
     };
 
     res.json(cartWithFinalPrices);
@@ -126,15 +152,10 @@ const addToCart = async (req, res) => {
       }
     });
     
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+   if (!product || !product.isActive) {
+      return res.status(404).json({ message: 'Product not found or inactive' });
     }
 
-    if (!product.isActive) {
-      return res.status(400).json({ message: 'Product is not available' });
-    }
-
-    // بررسی موجودی کلی محصول
     if (product.stock < quantity) {
       return res.status(400).json({ 
         message: `Insufficient stock. Only ${product.stock} items available` 

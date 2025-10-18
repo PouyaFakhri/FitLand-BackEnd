@@ -1,4 +1,3 @@
-// src/utils/validation.js - نسخه کامل و نهایی
 const { z } = require('zod');
 
 // ==================== Schemas مشترک ====================
@@ -15,7 +14,7 @@ const uuidParamSchema = z.object({
 
 // ==================== Schemas محصول ====================
 const productSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(200).trim(),
   brand: z.string().max(100).optional(),
   description: z.string().max(1000).optional(),
   price: z.coerce.number().positive(),
@@ -31,38 +30,44 @@ const productSchema = z.object({
 const productUpdateSchema = productSchema.partial();
 
 const productSizeSchema = z.object({
-  size: z.string().min(1).max(20),
+  size: z.string().min(1).max(20).trim(),
   stock: z.coerce.number().int().min(0)
 });
 
 const productColorSchema = z.object({
-  color: z.string().min(1).max(50),
-  colorCode: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/),
+  color: z.string().min(1).max(50).trim(),
+  colorCode: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, 'Invalid color code format'),
   imageUrl: z.string().url().optional()
 });
 
 // ==================== Schemas کاربر ====================
 const userRegistrationSchema = z.object({
-  firstName: z.string().min(2).max(50),
-  lastName: z.string().min(1).max(50),
-  email: z.string().email(),
+  firstName: z.string().min(2).max(50).trim(),
+  lastName: z.string().min(1).max(50).trim(),
+  email: z.string().email().toLowerCase(),
   password: z.string().min(8).max(100).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
     message: 'Password must contain at least one lowercase letter, one uppercase letter, and one number'
   })
 });
 
 const userLoginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().toLowerCase(),
   password: z.string().min(1),
   device: z.string().optional()
 });
 
 const userUpdateSchema = z.object({
-  firstName: z.string().min(2).max(50).optional(),
-  lastName: z.string().min(1).max(50).optional(),
-  phoneNumber: z.string().optional(),
-  nationalCode: z.string().length(10).regex(/^\d+$/).optional(),
-  birthDate: z.string().datetime().optional(),
+  firstName: z.string().min(2).max(50).trim().optional(),
+  lastName: z.string().min(1).max(50).trim().optional(),
+  phoneNumber: z.string().regex(/^(\+98|0)?9\d{9}$/, 'Invalid Iranian phone number').optional(),
+  nationalCode: z.string().length(10).regex(/^\d+$/, 'National code must be 10 digits').optional(),
+  birthDate: z.string().datetime().optional().refine(date => {
+    if (!date) return true;
+    const birth = new Date(date);
+    const now = new Date();
+    const age = now.getFullYear() - birth.getFullYear();
+    return birth < now && age >= 13 && age <= 120;
+  }, 'Birth date must be valid (age 13-120)'),
   gender: z.enum(['male', 'female']).optional()
 });
 
@@ -70,21 +75,22 @@ const userUpdateSchema = z.object({
 const orderItemSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.coerce.number().int().positive().max(100),
-  size: z.string().optional().nullable(),
-  color: z.string().optional().nullable()
+  size: z.string().max(20).optional().nullable(),
+  color: z.string().max(50).optional().nullable()
 });
 
 const orderSchema = z.object({
   items: z.array(orderItemSchema).min(1).max(50),
-  address: z.string().min(10).max(500)
+  address: z.string().min(10).max(500).trim(),
+  paymentMethod: z.enum(['ONLINE', 'CASH_ON_DELIVERY']).default('ONLINE').optional()
 });
 
 // ==================== Schemas سبد خرید ====================
 const addToCartSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.coerce.number().int().positive().max(100),
-  size: z.string().optional().nullable(),
-  color: z.string().optional().nullable()
+  size: z.string().max(20).optional().nullable(),
+  color: z.string().max(50).optional().nullable()
 });
 
 const updateCartItemSchema = z.object({
@@ -97,14 +103,16 @@ const cartItemIdParamSchema = z.object({
 
 // ==================== Schemas آدرس ====================
 const addressSchema = z.object({
-  title: z.string().max(100).default('آدرس اصلی'),
-  province: z.string().max(100),
-  city: z.string().max(100),
-  postalCode: z.string().max(20),
-  address: z.string().min(10),
-  recipientName: z.string().max(100),
-  recipientPhone: z.string().max(20),
-  isDefault: z.boolean().default(false)
+  title: z.string().max(100).trim().default('آدرس اصلی'),
+  province: z.string().max(100).trim(),
+  city: z.string().max(100).trim(),
+  postalCode: z.string().max(20).regex(/^\d{10}$/, 'Postal code must be 10 digits'),
+  address: z.string().min(10).max(500).trim(),
+  recipientName: z.string().max(100).trim(),
+  recipientPhone: z.string().regex(/^(\+98|0)?9\d{9}$/, 'Invalid Iranian phone number'),
+  isDefault: z.boolean().default(false),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional()
 });
 
 // ==================== Schemas جستجو ====================
@@ -123,7 +131,7 @@ const searchSchema = z.object({
 
 // ==================== Schemas کوپن ====================
 const couponSchema = z.object({
-  code: z.string().min(1).max(50),
+  code: z.string().min(1).max(50).toUpperCase(),
   discountType: z.enum(['PERCENTAGE', 'FIXED_AMOUNT']),
   value: z.coerce.number().positive(),
   minOrder: z.coerce.number().min(0).optional(),
@@ -142,12 +150,12 @@ const validateCouponSchema = z.object({
 const returnItemSchema = z.object({
   orderItemId: z.string().uuid(),
   quantity: z.coerce.number().int().positive(),
-  returnReason: z.string().min(5).max(200)
+  returnReason: z.string().min(5).max(200).trim()
 });
 
 const returnRequestSchema = z.object({
   orderId: z.string().uuid(),
-  reason: z.string().min(10).max(500),
+  reason: z.string().min(10).max(500).trim(),
   items: z.array(returnItemSchema).min(1)
 });
 
@@ -162,13 +170,13 @@ const reviewSchema = z.object({
   productId: z.string().uuid(),
   rating: z.coerce.number().int().min(1).max(5),
   text: z.string().max(500).optional(),
-  images: z.array(z.string().url()).max(5).optional()
+  images: z.array(z.string().url()).max(3).optional()
 });
 
 const updateReviewSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5).optional(),
   text: z.string().max(500).optional(),
-  images: z.array(z.string().url()).max(5).optional()
+  images: z.array(z.string().url()).max(3).optional()
 });
 
 const reviewIdParamSchema = z.object({
@@ -204,12 +212,12 @@ const newsletterSubscribeSchema = z.object({
 
 const newsletterUnsubscribeSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
-  token: z.string()
+  token: z.string().min(32)
 });
 
 const newsletterBroadcastSchema = z.object({
-  subject: z.string().min(5).max(200),
-  content: z.string().min(10).max(10000)
+  subject: z.string().min(5).max(200).trim(),
+  content: z.string().min(10).max(10000).trim()
 });
 
 // ==================== Schemas احراز هویت پیشرفته ====================
@@ -223,24 +231,24 @@ const sendVerificationCodeSchema = z.object({
 const verifyCodeSchema = z.object({
   email: z.string().email().optional(),
   phoneNumber: z.string().optional(),
-  code: z.string().length(5)
+  code: z.string().length(5).regex(/^\d+$/, 'Code must be 5 digits')
 }).refine((data) => data.email || data.phoneNumber, {
   message: 'Email or phone number is required'
 });
 
 const registerWithPhoneSchema = z.object({
-  firstName: z.string().min(2).max(50),
-  lastName: z.string().min(1).max(50),
-  phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,15}$/),
+  firstName: z.string().min(2).max(50).trim(),
+  lastName: z.string().min(1).max(50).trim(),
+  phoneNumber: z.string().regex(/^(\+98|0)?9\d{9}$/, 'Invalid Iranian phone number'),
   email: z.string().email().optional()
 });
 
 const resetPasswordSchema = z.object({
   email: z.string().email().optional(),
   phoneNumber: z.string().optional(),
-  code: z.string().length(5),
+  code: z.string().length(5).regex(/^\d+$/),
   newPassword: z.string().min(8).max(100).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message: 'Password must contain at least one lowercase letter, one uppercase letter, and one number'
+    message: 'Password must contain at least one lowercase, uppercase and digit'
   })
 }).refine((data) => data.email || data.phoneNumber, {
   message: 'Email or phone number is required'
@@ -277,7 +285,6 @@ const validate = (schema) => {
   };
 };
 
-// Query validation
 const validateQuery = (schema) => {
   return (req, res, next) => {
     try {
@@ -306,7 +313,6 @@ const validateQuery = (schema) => {
   };
 };
 
-// Params validation
 const validateParams = (schema) => {
   return (req, res, next) => {
     try {

@@ -8,6 +8,35 @@ const generateOrderCode = () => {
   return Math.floor(10000000 + Math.random() * 90000000).toString();
 };
 
+// اعتبارسنجی آیتم‌های سفارش
+const validateOrderItems = (items) => {
+  const errors = [];
+  
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    errors.push('Order must contain at least one item');
+    return errors;
+  }
+  
+  if (items.length > 50) {
+    errors.push('Order cannot contain more than 50 items');
+  }
+  
+  items.forEach((item, index) => {
+    if (!item.productId) {
+      errors.push(`Item ${index + 1}: productId is required`);
+    }
+    
+    if (!item.quantity || item.quantity < 1) {
+      errors.push(`Item ${index + 1}: quantity must be at least 1`);
+    }
+    
+    if (item.quantity > 100) {
+      errors.push(`Item ${index + 1}: quantity cannot exceed 100`);
+    }
+  });
+  
+  return errors;
+};
 // تابع کمکی برای بررسی موجودی
 const checkStockWithLocking = async (tx, items) => {
   const stockChecks = [];
@@ -44,9 +73,14 @@ const checkStockWithLocking = async (tx, items) => {
       }
     }
 
-    // محاسبه قیمت با تخفیف
-    const finalPrice = parseFloat(product.price.toString()) * 
-      (1 - parseFloat(product.discountPercent.toString()) / 100);
+    // محاسبه قیمت با تخفیف - تبدیل صحیح Decimal
+    const productPrice = typeof product.price === 'object' ? 
+      parseFloat(product.price.toString()) : parseFloat(product.price);
+    
+    const discountPercent = typeof product.discountPercent === 'object' ?
+      parseFloat(product.discountPercent.toString()) : parseFloat(product.discountPercent);
+    
+    const finalPrice = productPrice * (1 - discountPercent / 100);
     
     total += finalPrice * item.quantity;
 
@@ -55,12 +89,45 @@ const checkStockWithLocking = async (tx, items) => {
       quantity: item.quantity,
       size: item.size,
       color: item.color,
-      price: finalPrice.toFixed(2),
-      productName: product.name
+      price: parseFloat(finalPrice.toFixed(2)),
+      productName: product.name,
+      productPrice: productPrice,
+      discountPercent: discountPercent
     });
   }
 
   return { orderItems, total: parseFloat(total.toFixed(2)) };
+};
+
+// تابع اجرای transaction با قابلیت retry
+const executeWithRetry = async (transactionFn, maxRetries = 3) => {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await transactionFn();
+    } catch (error) {
+      lastError = error;
+      
+      // اگر خطا مربوط به deadlock یا timeout باشد، retry می‌کنیم
+      if (error.code === 'P2034' || error.message.includes('timeout')) {
+        logger.warn(`Transaction attempt ${attempt} failed, retrying...`, { 
+          error: error.message,
+          attempt 
+        });
+        
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+          continue;
+        }
+      }
+      
+      // برای سایر خطاها retry نمی‌کنیم
+      throw error;
+    }
+  }
+  
+  throw lastError;
 };
 
 const createOrder = async (req, res) => {
@@ -68,76 +135,96 @@ const createOrder = async (req, res) => {
     const { items, address, paymentMethod = 'ONLINE' } = req.body;
     const userId = req.user.id;
 
-    // استفاده از transaction با timeout
-    const result = await prisma.$transaction(async (tx) => {
-      // بررسی موجودی و محاسبه قیمت
-      const { orderItems, total } = await checkStockWithLocking(tx, items);
-
-      const orderCode = generateOrderCode();
-
-      // ایجاد سفارش
-      const order = await tx.order.create({
-        data: {
-          id: uuidv4(),
-          userId,
-          total,
-          address,
-          status: paymentMethod === 'CASH_ON_DELIVERY' ? 'PENDING' : 'PENDING',
-          orderCode,
-          paymentMethod
-        }
+    // اعتبارسنجی اولیه
+    const validationErrors = validateOrderItems(items);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors,
+        code: 'VALIDATION_ERROR'
       });
+    }
 
-      // ایجاد آیتم‌های سفارش
-      const orderItemData = orderItems.map(item => ({
-        orderId: order.id,
-        productId: item.productId,
-        quantity: item.quantity,
-        price: item.price,
-        size: item.size || null,
-        color: item.color || null
-      }));
+    // استفاده از transaction با timeout و retry
+    const result = await executeWithRetry(() => 
+      prisma.$transaction(async (tx) => {
+        // بررسی موجودی و محاسبه قیمت
+        const { orderItems, total } = await checkStockWithLocking(tx, items);
 
-      await tx.orderItem.createMany({
-        data: orderItemData
-      });
+        const orderCode = generateOrderCode();
 
-      // آپدیت موجودی
-      for (const item of orderItems) {
-        // آپدیت موجودی محصول
-        await tx.product.update({
-          where: { id: item.productId },
+        // ایجاد سفارش
+        const order = await tx.order.create({
           data: {
-            stock: { decrement: item.quantity },
-            salesCount: { increment: item.quantity }
+            id: uuidv4(),
+            userId,
+            total,
+            address,
+            status: paymentMethod === 'CASH_ON_DELIVERY' ? 'PENDING' : 'PENDING',
+            orderCode,
+            paymentMethod
           }
         });
 
-        // آپدیت موجودی سایز اگر مشخص شده
-        if (item.size && item.size !== 'ONE_SIZE') {
-          await tx.productSize.updateMany({
-            where: {
-              productId: item.productId,
-              size: item.size
-            },
+        // ایجاد آیتم‌های سفارش
+        const orderItemData = orderItems.map(item => ({
+          id: uuidv4(),
+          orderId: order.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          size: item.size || null,
+          color: item.color || null,
+          productSnapshot: JSON.stringify({
+            name: item.productName,
+            originalPrice: item.productPrice,
+            discountPercent: item.discountPercent,
+            calculatedAt: new Date().toISOString()
+          })
+        }));
+
+        await tx.orderItem.createMany({
+          data: orderItemData
+        });
+
+        // آپدیت موجودی
+        for (const item of orderItems) {
+          // آپدیت موجودی محصول
+          await tx.product.update({
+            where: { id: item.productId },
             data: {
-              stock: { decrement: item.quantity }
+              stock: { decrement: item.quantity },
+              salesCount: { increment: item.quantity }
             }
           });
+
+          // آپدیت موجودی سایز اگر مشخص شده
+          if (item.size && item.size !== 'ONE_SIZE') {
+            await tx.productSize.updateMany({
+              where: {
+                productId: item.productId,
+                size: item.size
+              },
+              data: {
+                stock: { decrement: item.quantity }
+              }
+            });
+          }
         }
-      }
 
-      // پاک کردن سبد خرید
-      const cart = await tx.cart.findUnique({ where: { userId } });
-      if (cart) {
-        await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-      }
+        // پاک کردن سبد خرید
+        const cart = await tx.cart.findUnique({ where: { userId } });
+        if (cart) {
+          await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+        }
 
-      return order;
-    }, {
-      maxWait: 5000,  // حداکثر 5 ثانیه انتظار برای شروع transaction
-      timeout: 10000  // حداکثر 10 ثانیه برای اجرای کل transaction
-    });
+        return order;
+      }, {
+        maxWait: 5000,
+        timeout: 10000
+      })
+    );
 
     // بازگشت سفارش با جزئیات
     const orderWithDetails = await prisma.order.findUnique({
@@ -171,22 +258,52 @@ const createOrder = async (req, res) => {
         ? 'سفارش با پرداخت در محل ثبت شد' 
         : 'سفارش با موفقیت ایجاد شد'
     });
+
   } catch (err) {
     logger.error('Create order failed', { 
       error: err.message,
-      userId: req.user.id 
+      userId: req.user?.id,
+      errorCode: err.code,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
     
+    // هندل کردن انواع خطاها
     if (err.message.includes('Insufficient stock')) {
       return res.status(400).json({ 
         success: false,
-        message: err.message 
+        message: err.message,
+        code: 'INSUFFICIENT_STOCK'
+      });
+    }
+    
+    if (err.message.includes('not found') || err.message.includes('inactive')) {
+      return res.status(404).json({ 
+        success: false,
+        message: err.message,
+        code: 'PRODUCT_NOT_FOUND'
+      });
+    }
+    
+    if (err.code === 'P2034') {
+      return res.status(409).json({ 
+        success: false,
+        message: 'Transaction conflict, please try again',
+        code: 'TRANSACTION_CONFLICT'
+      });
+    }
+    
+    if (err.message.includes('timeout')) {
+      return res.status(408).json({ 
+        success: false,
+        message: 'Request timeout, please try again',
+        code: 'REQUEST_TIMEOUT'
       });
     }
     
     res.status(500).json({ 
       success: false,
-      message: 'Failed to create order' 
+      message: 'Failed to create order',
+      code: 'INTERNAL_ERROR'
     });
   }
 };

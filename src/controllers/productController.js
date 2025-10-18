@@ -25,11 +25,16 @@ const getAll = async (req, res) => {
     const where = { isActive: true };
 
     // فیلتر برند
-    if (brands) {
-      const brandList = Array.isArray(brands) ? brands : brands.split(",");
-      where.brand = { in: brandList.filter(Boolean) };
+     if (brands) {
+      const brandList = Array.isArray(brands) 
+        ? brands 
+        : (typeof brands === 'string' ? brands.split(",").map(b => b.trim()).filter(Boolean) : []);
+      
+      if (brandList.length > 0) {
+        where.brand = { in: brandList };
+      }
     } else if (brand) {
-      where.brand = brand;
+      where.brand = { contains: brand, mode: 'insensitive' };
     }
 
     // فیلتر قیمت
@@ -145,6 +150,52 @@ const getAll = async (req, res) => {
   } catch (err) {
     logger.error("Get products failed", { error: err.message });
     res.status(500).json({ message: "Failed to retrieve products" });
+  }
+};
+
+const getNewestSportsShoes = async (req, res) => {
+  try {
+    const { limit = 12 } = req.query;
+    
+    const products = await prisma.product.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { category: { name: { contains: 'کفش ورزشی' } } },
+          { name: { contains: 'کفش', mode: 'insensitive' } }
+        ]
+      },
+      include: {
+        sizes: true,
+        colors: true,
+        category: true,
+        reviews: { 
+          select: { rating: true },
+          where: { isApproved: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit)
+    });
+
+    // محاسبه میانگین امتیاز
+    const productsWithRating = products.map(product => {
+      const avgRating = product.reviews.length > 0 
+        ? product.reviews.reduce((sum, r) => sum + r.rating, 0) / product.reviews.length 
+        : 0;
+      
+      return {
+        ...product,
+        finalPrice: product.price * (1 - product.discountPercent / 100),
+        hasDiscount: product.discountPercent > 0,
+        avgRating: Math.round(avgRating * 10) / 10
+      };
+    });
+
+    res.json(productsWithRating);
+  } catch (err) {
+    logger.error("Get newest sports shoes failed", { error: err.message });
+    res.status(500).json({ message: "Failed to retrieve newest sports shoes" });
   }
 };
 
@@ -753,5 +804,6 @@ module.exports = {
   updateProduct,
   deleteProduct,
   addProductSize,
-  addProductColor
+  addProductColor,
+  getNewestSportsShoes
 };
